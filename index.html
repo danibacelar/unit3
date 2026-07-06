@@ -1,0 +1,818 @@
+# -*- coding: utf-8 -*-
+# Generator script: produces a single self-contained index.html
+# with ONLY HTML + CSS (no JavaScript at all in the output file).
+# This script itself is Python tooling used only to assemble the
+# static file efficiently; nothing here ends up as JS in the page.
+
+import html
+
+def esc(s):
+    return s
+
+# ---------------------------------------------------------------
+# MODULE 1: Find the Mistake
+# each item: prompt (with <u>marked</u> spans not needed, plain text),
+# options: list of (letter, text, is_correct, explanation)
+# ---------------------------------------------------------------
+m1 = [
+    dict(
+        case="Case File 01 — Modals of Deduction (Present)",
+        prompt="Nobody's answering the phone. She <strong>must working</strong> late at the office.",
+        options=[
+            ("A", "Nobody's answering", False, "This part is fine — it simply describes the situation."),
+            ("B", "must working", True, "Correct! For present deduction we need <em>must + BE + verb-ing</em>: \u201cshe must <u>be working</u>.\u201d The bare verb-ing after a modal is never correct."),
+            ("C", "late", False, "This part is fine — “late” is a normal adverb of time here."),
+            ("D", "at the office", False, "This part is fine — it's just a place phrase."),
+        ]
+    ),
+    dict(
+        case="Case File 02 — Modals of Deduction (Past)",
+        prompt="The window is broken and there are footprints outside. Someone <strong>must broke</strong> in last night.",
+        options=[
+            ("A", "is broken", False, "This part is fine — present tense describing the current state of the window."),
+            ("B", "footprints outside", False, "This part is fine — a simple noun phrase."),
+            ("C", "must broke", True, "Correct! Deduction about the past needs <em>must have + past participle</em>: \u201cmust <u>have broken</u> in.\u201d Never “must + past simple.”"),
+            ("D", "last night", False, "This part is fine — a normal time expression."),
+        ]
+    ),
+    dict(
+        case="Case File 03 — Past Perfect",
+        prompt="By the time the detective arrived, the thief <strong>has already escaped</strong> through the back door.",
+        options=[
+            ("A", "By the time", False, "This part is fine — a classic Past Perfect signal phrase."),
+            ("B", "has already escaped", True, "Correct! Because “arrived” is already in the past, the earlier action needs the Past Perfect: “<u>had already escaped</u>.” We can't mix a present perfect with a past time frame."),
+            ("C", "through", False, "This part is fine — just a preposition."),
+            ("D", "back door", False, "This part is fine — a normal noun phrase."),
+        ]
+    ),
+    dict(
+        case="Case File 04 — Past Perfect (never)",
+        prompt="She told me she <strong>never saw</strong> such an ancient manuscript before that day.",
+        options=[
+            ("A", "told me", False, "This part is fine — simple past reporting verb."),
+            ("B", "never saw", True, "Correct! “Before that day” marks an earlier past, so we need Past Perfect: “she <u>had never seen</u> such an ancient manuscript.”"),
+            ("C", "such an ancient", False, "This part is fine — “ancient” is a great descriptive adjective here."),
+            ("D", "before that day", False, "This part is fine — this is exactly the clue that tells us Past Perfect is needed elsewhere."),
+        ]
+    ),
+    dict(
+        case="Case File 05 — Future Continuous",
+        prompt="Don't call me at 8 pm tomorrow — I <strong>will study</strong> for my exam at that exact time.",
+        options=[
+            ("A", "Don't call", False, "This part is fine — an imperative."),
+            ("B", "will study", True, "Correct! An action in progress at a specific future moment needs Future Continuous: “I <u>will be studying</u> at that exact time.”"),
+            ("C", "for my exam", False, "This part is fine — a normal purpose phrase."),
+            ("D", "at that exact time", False, "This part is fine — and it's exactly the clue that signals Future Continuous is needed."),
+        ]
+    ),
+    dict(
+        case="Case File 06 — Future Perfect",
+        prompt="By next June, she <strong>will finish</strong> her research on the mysterious manuscript.",
+        options=[
+            ("A", "By next June", False, "This part is fine — “by + time” is the classic Future Perfect signal."),
+            ("B", "will finish", True, "Correct! “By + a future time” needs Future Perfect: “she <u>will have finished</u> her research.” It shows an action completed before that future point."),
+            ("C", "her research", False, "This part is fine — a simple noun phrase."),
+            ("D", "mysterious manuscript", False, "This part is fine — nice use of a descriptive adjective, no error here."),
+        ]
+    ),
+    dict(
+        case="Case File 07 — Future Modals (be able to)",
+        prompt="Once she learns the code, she <strong>will can</strong> decipher the whole book.",
+        options=[
+            ("A", "Once she learns", False, "This part is fine — present simple correctly used in a future time clause."),
+            ("B", "the code", False, "This part is fine — a simple noun phrase."),
+            ("C", "will can", True, "Correct! Two modals can never sit together. Ability in the future uses “<u>will be able to</u>” decipher, not “will can.”"),
+            ("D", "decipher the whole book", False, "This part is fine — the base verb form is correct here."),
+        ]
+    ),
+    dict(
+        case="Case File 08 — Future Modals (have to)",
+        prompt="If the deadline changes, we <strong>will must</strong> submit the report earlier.",
+        options=[
+            ("A", "If the deadline changes", False, "This part is fine — present simple correctly used in a first conditional / future time clause."),
+            ("B", "we", False, "This part is fine — a simple subject pronoun."),
+            ("C", "will must", True, "Correct! “Must” has no future form, so obligation in the future uses “<u>will have to</u>” submit, never “will must.”"),
+            ("D", "submit the report earlier", False, "This part is fine — a normal verb phrase."),
+        ]
+    ),
+    dict(
+        case="Case File 09 — Future Time Clauses",
+        prompt="As soon as she <strong>will finish</strong> the translation, she'll publish her findings.",
+        options=[
+            ("A", "As soon as", False, "This part is fine — the correct future time-clause connector."),
+            ("B", "will finish", True, "Correct! After time-clause words like <em>as soon as / when / before / after / until</em>, we use present simple to talk about the future: “as soon as she <u>finishes</u>.”"),
+            ("C", "the translation", False, "This part is fine — a simple noun phrase."),
+            ("D", "publish her findings", False, "This part is fine — the main clause correctly keeps “will + base verb.”"),
+        ]
+    ),
+    dict(
+        case="Case File 10 — Adverbs of Manner",
+        prompt="The researcher <strong>carefully very</strong> examined the ancient pages yesterday.",
+        options=[
+            ("A", "The researcher", False, "This part is fine — a simple subject."),
+            ("B", "carefully very", True, "Correct! An intensifier comes <em>before</em> the adverb of manner, not after: “<u>very carefully</u> examined.” The order “adverb + intensifier” is never correct in English."),
+            ("C", "examined the", False, "This part is fine — a normal verb + article."),
+            ("D", "ancient pages yesterday", False, "This part is fine — “yesterday” correctly sits as an adverb of time at the end of the sentence."),
+        ]
+    ),
+]
+
+# ---------------------------------------------------------------
+# MODULE 2: Reading comprehension
+# ---------------------------------------------------------------
+reading_text = """For centuries, scholars <strong>had tried</strong> to decode the Voynich Manuscript, but nobody had succeeded.
+The strange book, full of unknown symbols and drawings of plants that don't exist, <strong>must have been written</strong> by
+someone with a secret purpose — perhaps a scientist, or maybe a fraud. Some researchers believe the author
+<strong>might have invented</strong> an entire language just to hide forbidden knowledge. Next year, a team of linguists
+<strong>will be analysing</strong> the manuscript's patterns using new software. By the end of the project, <strong>they will have
+tested</strong> over ten different theories. If the code is finally broken, it will be one of the greatest mysteries in
+history to be solved. Until someone finds the key, the manuscript's secrets can't be safe forever."""
+
+m2 = [
+    dict(
+        highlight="scholars had tried to decode the Voynich Manuscript",
+        tense="Past Perfect",
+        options=[
+            ("A", "By the time she graduated, she had already travelled to ten countries.", True,
+             "Correct! Both sentences use Past Perfect (had + past participle) to show an action completed before another past moment."),
+            ("B", "She will have graduated by next year.", False,
+             "This is Future Perfect (will have + participle) — a different tense, used for a future deadline, not a past one."),
+            ("C", "She is graduating next month.", False,
+             "This is Present Continuous with future meaning — no relation to Past Perfect."),
+            ("D", "She must have graduated already.", False,
+             "This is a Modal of Deduction about the past (must have + participle), not Past Perfect."),
+        ]
+    ),
+    dict(
+        highlight="must have been written by someone with a secret purpose",
+        tense="Modal of Deduction — Past (near certainty)",
+        options=[
+            ("A", "He must be sleeping right now.", False,
+             "This is deduction about the PRESENT (must + be + verb-ing), not the past."),
+            ("B", "The letter must have been sent by an old friend.", True,
+             "Correct! Both use “must have been + past participle” — strong deduction about something in the past."),
+            ("C", "The letter will have been sent by Friday.", False,
+             "This is Future Perfect passive, expressing a future deadline, not a deduction."),
+            ("D", "The letter might be lost.", False,
+             "This is a present modal of possibility, not a past deduction with “must have.”"),
+        ]
+    ),
+    dict(
+        highlight="might have invented an entire language",
+        tense="Modal of Deduction — Past (possibility)",
+        options=[
+            ("A", "She could have forgotten her keys at home.", True,
+             "Correct! “Could have / might have + past participle” both express a possible (not certain) explanation for a past situation."),
+            ("B", "She can't have forgotten her keys.", False,
+             "“Can't have” expresses near-certainty that something did NOT happen — the opposite level of certainty."),
+            ("C", "She will be forgetting her keys.", False,
+             "This is Future Continuous, unrelated to speculation about the past."),
+            ("D", "She must forget her keys often.", False,
+             "This describes a habit/deduction about a general truth, not a speculative past modal."),
+        ]
+    ),
+    dict(
+        highlight="a team of linguists will be analysing the manuscript's patterns",
+        tense="Future Continuous",
+        options=[
+            ("A", "This time next week, we will be flying to Lisbon.", True,
+             "Correct! Both use “will be + verb-ing” to describe an action in progress at a specific future moment."),
+            ("B", "We will have flown to Lisbon by next week.", False,
+             "This is Future Perfect — completion before a deadline, not an action in progress."),
+            ("C", "We are flying to Lisbon tomorrow.", False,
+             "This is Present Continuous used for a fixed future arrangement, a different structure."),
+            ("D", "We must be flying to Lisbon already.", False,
+             "This is a present modal of deduction, not Future Continuous."),
+        ]
+    ),
+    dict(
+        highlight="they will have tested over ten different theories",
+        tense="Future Perfect",
+        options=[
+            ("A", "By December, we will have finished the whole project.", True,
+             "Correct! Both use “will have + past participle” to show something completed before a future point in time."),
+            ("B", "By December, we will be finishing the whole project.", False,
+             "This is Future Continuous — an action in progress at that time, not necessarily completed."),
+            ("C", "We had finished the whole project by December.", False,
+             "This is Past Perfect — completion before a point in the PAST, not the future."),
+            ("D", "We will finish the whole project in December.", False,
+             "This is simple Future — it doesn't emphasise completion before a deadline the way Future Perfect does."),
+        ]
+    ),
+]
+
+# ---------------------------------------------------------------
+# MODULE 3: Identify the Tense
+# ---------------------------------------------------------------
+tense_options = [
+    "Past Perfect",
+    "Future Continuous",
+    "Future Perfect",
+    "Modal of Deduction — Present",
+    "Modal of Deduction — Past",
+]
+
+m3 = [
+    ("She had finished her homework before dinner.", "Past Perfect"),
+    ("At 9 pm tonight, we will be watching the final episode.", "Future Continuous"),
+    ("By 2030, scientists will have discovered new planets.", "Future Perfect"),
+    ("He must be sleeping — the lights are off.", "Modal of Deduction — Present"),
+    ("They can't have left already; their car is still here.", "Modal of Deduction — Past"),
+    ("By the time she called, I had already left the building.", "Past Perfect"),
+    ("This time tomorrow, I will be flying to Tokyo.", "Future Continuous"),
+    ("We will have completed the entire course by June.", "Future Perfect"),
+    ("She might be joking — she often makes strange jokes.", "Modal of Deduction — Present"),
+    ("He must have forgotten his keys; he's knocking on the door.", "Modal of Deduction — Past"),
+]
+
+explanations3 = {
+    "Past Perfect": "Past Perfect (had + past participle) shows an action finished before another past moment.",
+    "Future Continuous": "Future Continuous (will be + verb-ing) shows an action in progress at a specific future moment.",
+    "Future Perfect": "Future Perfect (will have + past participle) shows an action completed before a future deadline.",
+    "Modal of Deduction — Present": "This modal (must/might/could/can't + base verb, or + be + verb-ing) expresses a guess about NOW.",
+    "Modal of Deduction — Past": "This modal (must/might/could/can't + HAVE + past participle) expresses a guess about something already finished.",
+}
+
+# ---------------------------------------------------------------
+# MODULE 4: Rewrite the Sentence (multiple choice)
+# ---------------------------------------------------------------
+m4 = [
+    dict(
+        original="She finishes the report.",
+        target="Rewrite as a Future Time Clause with “as soon as”:",
+        options=[
+            ("A", "As soon as she will finish the report, she'll send it.", False, "Never use “will” right after a future time-clause word — present simple is required."),
+            ("B", "As soon as she finishes the report, she'll send it.", True, "Correct! After “as soon as,” present simple refers to the future: “as soon as she finishes...”"),
+            ("C", "As soon as she finished the report, she'll send it.", False, "Simple past doesn't fit a sentence about a future plan."),
+            ("D", "As soon as she is finishing the report, she'll send it.", False, "Present Continuous isn't used after future time-clause connectors like this."),
+        ]
+    ),
+    dict(
+        original="They arrive.",
+        target="Rewrite using Future Perfect with “by 6 pm”:",
+        options=[
+            ("A", "By 6 pm, they will arrive.", False, "Simple future doesn't emphasise completion before the deadline."),
+            ("B", "By 6 pm, they will have arrived.", True, "Correct! “By + time” calls for Future Perfect: will have + past participle."),
+            ("C", "By 6 pm, they had arrived.", False, "Past Perfect refers to a point before a PAST moment, not a future deadline."),
+            ("D", "By 6 pm, they will be arriving.", False, "Future Continuous shows an action in progress, not completed."),
+        ]
+    ),
+    dict(
+        original="He learns to drive.",
+        target="Rewrite using the future modal “be able to”:",
+        options=[
+            ("A", "He will can drive.", False, "Two modals together (“will can”) are never correct in English."),
+            ("B", "He will has to drive.", False, "This mixes “will” with the wrong form of “have to.”"),
+            ("C", "He will be able to drive.", True, "Correct! Future ability uses “will be able to + base verb.”"),
+            ("D", "He will able to drive.", False, "Missing “be”: it must be “will BE able to.”"),
+        ]
+    ),
+    dict(
+        original="She leaves before he arrives.",
+        target="Rewrite as a past narrative using Past Perfect where needed:",
+        options=[
+            ("A", "She has left before he arrived.", False, "Present Perfect doesn't combine with a simple past time frame like this."),
+            ("B", "She left before he had arrived.", False, "Here the LATER action (arrived) wrongly gets Past Perfect instead of the earlier one."),
+            ("C", "She had left before he arrived.", True, "Correct! The earlier action (leaving) takes Past Perfect; the later one (arriving) stays in simple past."),
+            ("D", "She had left before he had arrived.", False, "Only one action needs Past Perfect — using it for both removes the sense of sequence."),
+        ]
+    ),
+    dict(
+        original="I study at 8 pm tomorrow.",
+        target="Rewrite using Future Continuous:",
+        options=[
+            ("A", "I will study at 8 pm tomorrow.", False, "Simple future doesn't show the action happening AT that exact moment."),
+            ("B", "I will be studying at 8 pm tomorrow.", True, "Correct! “Will be + verb-ing” shows an action in progress at a specific future time."),
+            ("C", "I will have studied at 8 pm tomorrow.", False, "Future Perfect shows completion before that time, not action in progress."),
+            ("D", "I am studying at 8 pm tomorrow.", False, "Present Continuous can express future plans, but not an action happening at one precise future moment like this context needs."),
+        ]
+    ),
+    dict(
+        original="We don't need to submit early if the deadline changes.",
+        target="Rewrite using the future modal “won't have to”:",
+        options=[
+            ("A", "We won't must submit early.", False, "“Must” has no future or negative-future form like this."),
+            ("B", "We won't have to submit early.", True, "Correct! Absence of future obligation uses “won't have to + base verb.”"),
+            ("C", "We don't will have to submit early.", False, "Word order is wrong — “will” must come before “not,” contracted as “won't.”"),
+            ("D", "We won't has to submit early.", False, "After “won't,” the base verb form is required: “have,” not “has.”"),
+        ]
+    ),
+]
+
+# ---------------------------------------------------------------
+# Build HTML fragments
+# ---------------------------------------------------------------
+
+def build_mc_question(qid, prompt, options, prompt_prefix=""):
+    """options: list of (letter, text, is_correct(bool), explanation)"""
+    inputs_labels = []
+    feedbacks = []
+    for letter, text, correct, expl in options:
+        oid = f"{qid}-{letter}"
+        inputs_labels.append(
+            f'<input type="radio" name="{qid}" id="{oid}">'
+            f'<label for="{oid}"><span class="opt-letter">{letter}</span>{text}</label>'
+        )
+        cls = "right" if correct else "wrong"
+        icon = "✅" if correct else "❌"
+        feedbacks.append(
+            f'<div class="feedback {cls}" id="fb-{oid}"><span class="stamp {cls}">{icon} {"CORRECT" if correct else "INCORRECT"}</span> {expl}</div>'
+        )
+    css_rules = "\n".join(
+        f'#{qid}-{letter}:checked ~ #fb-{qid}-{letter} {{ display:flex; }}'
+        for letter, *_ in options
+    )
+    html_block = f"""
+    <div class="q">
+      <p class="q-prompt">{prompt_prefix}{prompt}</p>
+      <div class="options">
+        {''.join(inputs_labels)}
+      </div>
+      {''.join(feedbacks)}
+    </div>"""
+    return html_block, css_rules
+
+
+def build_tense_question(qid, sentence, correct_tense, idx):
+    inputs_labels = []
+    feedbacks = []
+    for i, opt in enumerate(tense_options):
+        letter = chr(65 + i)
+        oid = f"{qid}-{letter}"
+        inputs_labels.append(
+            f'<input type="radio" name="{qid}" id="{oid}">'
+            f'<label for="{oid}"><span class="opt-letter">{letter}</span>{opt}</label>'
+        )
+        correct = (opt == correct_tense)
+        cls = "right" if correct else "wrong"
+        icon = "✅" if correct else "❌"
+        if correct:
+            expl = explanations3[opt]
+        else:
+            expl = f"Not quite — this sentence is actually <strong>{correct_tense}</strong>. {explanations3[correct_tense]}"
+        feedbacks.append(
+            f'<div class="feedback {cls}" id="fb-{oid}"><span class="stamp {cls}">{icon} {"CORRECT" if correct else "INCORRECT"}</span> {expl}</div>'
+        )
+    css_rules = "\n".join(
+        f'#{qid}-{chr(65+i)}:checked ~ #fb-{qid}-{chr(65+i)} {{ display:flex; }}'
+        for i in range(len(tense_options))
+    )
+    html_block = f"""
+    <div class="q">
+      <p class="q-prompt"><span class="tag">Evidence #{idx}</span> {sentence}</p>
+      <div class="options">
+        {''.join(inputs_labels)}
+      </div>
+      {''.join(feedbacks)}
+    </div>"""
+    return html_block, css_rules
+
+
+all_css_rules = []
+m1_html = []
+for i, item in enumerate(m1, start=1):
+    qid = f"m1q{i}"
+    block, css = build_mc_question(qid, item["prompt"], item["options"],
+                                    prompt_prefix=f'<span class="tag">{item["case"]}</span> ')
+    m1_html.append(block)
+    all_css_rules.append(css)
+
+m2_html = []
+for i, item in enumerate(m2, start=1):
+    qid = f"m2q{i}"
+    prompt = f'Which sentence below has the <strong>same verb tense / structure</strong> as the highlighted sentence in the text: <br>“<em>{item["highlight"]}</em>” <span class="tense-note">({item["tense"]})</span>'
+    opts = [(l, t, c, e) for (l, t, c, e) in item["options"]]
+    block, css = build_mc_question(qid, prompt, opts)
+    m2_html.append(block)
+    all_css_rules.append(css)
+
+m3_html = []
+for i, (sentence, tense) in enumerate(m3, start=1):
+    qid = f"m3q{i}"
+    block, css = build_tense_question(qid, sentence, tense, i)
+    m3_html.append(block)
+    all_css_rules.append(css)
+
+m4_html = []
+for i, item in enumerate(m4, start=1):
+    qid = f"m4q{i}"
+    prompt = f'<span class="tag">File #{i}</span> Original clue: “{item["original"]}”<br><span class="target-note">{item["target"]}</span>'
+    block, css = build_mc_question(qid, prompt, item["options"])
+    m4_html.append(block)
+    all_css_rules.append(css)
+
+feedback_css = "\n".join(all_css_rules)
+
+# ---------------------------------------------------------------
+# Assemble full page
+# ---------------------------------------------------------------
+
+page = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grammar Detective Agency — Case Files</title>
+<style>
+  :root {{
+    --ink: #1B2430;
+    --ink-2: #232E3D;
+    --parchment: #F1E8D0;
+    --parchment-2: #E8DCBE;
+    --red-stamp: #A6362C;
+    --teal-stamp: #3D6B5C;
+    --gold: #C7962F;
+    --charcoal: #2A241C;
+    --line: rgba(42,36,28,0.25);
+  }}
+
+  * {{ box-sizing: border-box; }}
+
+  html {{ scroll-behavior: smooth; }}
+
+  body {{
+    margin: 0;
+    background: var(--ink);
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(199,150,47,0.06), transparent 40%),
+      radial-gradient(circle at 80% 60%, rgba(61,107,92,0.08), transparent 45%);
+    color: var(--charcoal);
+    font-family: Georgia, 'Times New Roman', serif;
+    line-height: 1.55;
+    padding-bottom: 4rem;
+  }}
+
+  a {{ color: inherit; }}
+
+  /* ---------- Header / folder tabs ---------- */
+  header.masthead {{
+    background: var(--ink-2);
+    border-bottom: 4px solid var(--gold);
+    padding: 2.2rem 1.5rem 0;
+    text-align: center;
+  }}
+
+  header.masthead .eyebrow {{
+    font-family: 'Courier New', Courier, monospace;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    color: var(--gold);
+    margin-bottom: 0.6rem;
+  }}
+
+  header.masthead h1 {{
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--parchment);
+    font-size: clamp(1.6rem, 4vw, 2.6rem);
+    letter-spacing: 0.03em;
+    margin: 0 0 0.4rem;
+  }}
+
+  header.masthead p.sub {{
+    color: #C9C2AE;
+    font-size: 0.95rem;
+    margin: 0 0 1.6rem;
+    font-style: italic;
+  }}
+
+  nav.tabs {{
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 0.5rem;
+  }}
+
+  nav.tabs a {{
+    display: inline-block;
+    background: var(--parchment-2);
+    color: var(--charcoal);
+    text-decoration: none;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.7rem 1rem 0.6rem;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-bottom: none;
+    position: relative;
+    top: 2px;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }}
+
+  nav.tabs a:hover {{
+    background: var(--parchment);
+    transform: translateY(-3px);
+  }}
+
+  /* ---------- Sections (dossier pages) ---------- */
+  section.module {{
+    max-width: 900px;
+    margin: 0 auto 2.5rem;
+    background: var(--parchment);
+    border: 1px solid rgba(0,0,0,0.2);
+    border-top: none;
+    box-shadow: 0 20px 45px rgba(0,0,0,0.35);
+    position: relative;
+    scroll-margin-top: 1.5rem;
+  }}
+
+  section.module::before {{
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 10px;
+    background: repeating-linear-gradient(90deg,
+      rgba(0,0,0,0.08) 0 14px, transparent 14px 28px);
+  }}
+
+  .module-inner {{
+    padding: 2.2rem 2rem 2.6rem;
+  }}
+
+  .module-header {{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 2px solid var(--charcoal);
+    padding-bottom: 1rem;
+    margin-bottom: 1.6rem;
+    flex-wrap: wrap;
+  }}
+
+  .module-header h2 {{
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.4rem;
+    margin: 0;
+    letter-spacing: 0.02em;
+  }}
+
+  .module-header .module-num {{
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    color: var(--red-stamp);
+    border: 2px solid var(--red-stamp);
+    padding: 0.2rem 0.5rem;
+    transform: rotate(-4deg);
+    white-space: nowrap;
+    align-self: center;
+  }}
+
+  .module-desc {{
+    font-size: 0.95rem;
+    color: #4A4130;
+    margin-bottom: 1.8rem;
+  }}
+
+  /* ---------- Questions ---------- */
+  .q {{
+    background: rgba(255,255,255,0.35);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.1rem 1.2rem 1.3rem;
+    margin-bottom: 1.4rem;
+  }}
+
+  .q-prompt {{
+    margin: 0 0 0.9rem;
+    font-size: 1.02rem;
+  }}
+
+  .tag {{
+    display: inline-block;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--charcoal);
+    color: var(--parchment);
+    padding: 0.15rem 0.5rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0.3rem;
+  }}
+
+  .tense-note, .target-note {{
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.78rem;
+    color: var(--teal-stamp);
+    display: inline-block;
+    margin-top: 0.3rem;
+  }}
+
+  .options {{
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }}
+
+  .options input[type="radio"] {{
+    position: absolute;
+    opacity: 0;
+    width: 1px; height: 1px;
+  }}
+
+  .options label {{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #fff;
+    border: 1.5px solid rgba(0,0,0,0.18);
+    border-radius: 5px;
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+    font-size: 0.96rem;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  }}
+
+  .options label:hover {{
+    border-color: var(--gold);
+    transform: translateX(2px);
+  }}
+
+  .opt-letter {{
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    background: var(--ink);
+    color: var(--parchment);
+    border-radius: 50%;
+    width: 1.6rem;
+    height: 1.6rem;
+    min-width: 1.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+  }}
+
+  .options input[type="radio"]:focus-visible + label {{
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+  }}
+
+  .options input[type="radio"]:checked + label {{
+    border-color: var(--charcoal);
+    background: #FBF6E8;
+  }}
+
+  /* ---------- Feedback ---------- */
+  .feedback {{
+    display: none;
+    margin-top: 0.7rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    align-items: flex-start;
+    gap: 0.6rem;
+    line-height: 1.45;
+  }}
+
+  .feedback.right {{
+    background: rgba(61,107,92,0.14);
+    border: 1px solid var(--teal-stamp);
+    color: #234E41;
+  }}
+
+  .feedback.wrong {{
+    background: rgba(166,54,44,0.10);
+    border: 1px solid var(--red-stamp);
+    color: #7A2C23;
+  }}
+
+  .stamp {{
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    transform: rotate(-3deg);
+    flex-shrink: 0;
+  }}
+
+  .stamp.right {{ background: var(--teal-stamp); color: #F1F7F4; }}
+  .stamp.wrong {{ background: var(--red-stamp); color: #FBEDEB; }}
+
+  {feedback_css}
+
+  /* ---------- Reading text ---------- */
+  .reading-card {{
+    background: #FBF6E8;
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--gold);
+    padding: 1.3rem 1.4rem;
+    margin-bottom: 1.8rem;
+    font-size: 1rem;
+  }}
+
+  .reading-card strong {{
+    color: var(--red-stamp);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+  }}
+
+  /* ---------- Footer ---------- */
+  footer {{
+    max-width: 900px;
+    margin: 2rem auto 0;
+    text-align: center;
+    color: #9C93A1;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    padding: 0 1rem;
+  }}
+
+  footer a.top {{
+    color: var(--gold);
+    text-decoration: none;
+  }}
+
+  @media (max-width: 600px) {{
+    .module-inner {{ padding: 1.6rem 1.1rem 2rem; }}
+    nav.tabs a {{ font-size: 0.68rem; padding: 0.6rem 0.7rem 0.5rem; }}
+  }}
+
+  @media (prefers-reduced-motion: reduce) {{
+    * {{ transition: none !important; scroll-behavior: auto !important; }}
+  }}
+</style>
+</head>
+<body>
+
+<header class="masthead" id="top">
+  <div class="eyebrow">Grammar Detective Agency</div>
+  <h1>Case Files: Speculation &amp; the Future</h1>
+  <p class="sub">Four open cases. Every clue is a sentence. Choose carefully — the evidence talks back.</p>
+  <nav class="tabs">
+    <a href="#modulo1">Case 1 · Find the Mistake</a>
+    <a href="#modulo2">Case 2 · The Manuscript</a>
+    <a href="#modulo3">Case 3 · Name the Tense</a>
+    <a href="#modulo4">Case 4 · Rewrite the Clue</a>
+  </nav>
+</header>
+
+<section class="module" id="modulo1">
+  <div class="module-inner">
+    <div class="module-header">
+      <h2>Case 1 — Find the Mistake</h2>
+      <span class="module-num">10 clues</span>
+    </div>
+    <p class="module-desc">Each sentence below hides one grammar mistake. Select the underlined part you believe is wrong, and the file will reveal whether your instinct was right.</p>
+    {''.join(m1_html)}
+  </div>
+</section>
+
+<section class="module" id="modulo2">
+  <div class="module-inner">
+    <div class="module-header">
+      <h2>Case 2 — The Manuscript File</h2>
+      <span class="module-num">Reading</span>
+    </div>
+    <p class="module-desc">Read the case notes on a real unsolved mystery, then match the highlighted sentences to their grammar twins.</p>
+    <div class="reading-card">
+      <p>{reading_text}</p>
+    </div>
+    {''.join(m2_html)}
+  </div>
+</section>
+
+<section class="module" id="modulo3">
+  <div class="module-inner">
+    <div class="module-header">
+      <h2>Case 3 — Name the Tense</h2>
+      <span class="module-num">10 clues</span>
+    </div>
+    <p class="module-desc">For each piece of evidence, identify which grammar structure the detective is using.</p>
+    {''.join(m3_html)}
+  </div>
+</section>
+
+<section class="module" id="modulo4">
+  <div class="module-inner">
+    <div class="module-header">
+      <h2>Case 4 — Rewrite the Clue</h2>
+      <span class="module-num">6 clues</span>
+    </div>
+    <p class="module-desc">Each original clue must be rewritten in a new tense. Pick the option that is grammatically correct.</p>
+    {''.join(m4_html)}
+  </div>
+</section>
+
+<footer>
+  <p>End of file. <a class="top" href="#top">↑ Back to the top of the case</a></p>
+</footer>
+
+</body>
+</html>
+"""
+
+with open("/home/claude/index.html", "w", encoding="utf-8") as f:
+    f.write(page)
+
+print("Built. Length:", len(page))
